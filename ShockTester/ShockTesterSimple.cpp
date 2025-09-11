@@ -110,7 +110,32 @@ bool testMotorConnection(int port) {
     cout << "\n=== MOTOR CONNECTION TEST ===" << endl;
     cout << "Attempting connection on COM" << port << "..." << endl;
     
-    // Configure connection
+    // Step 1: Test if port can be opened
+    char portName[20];
+    sprintf(portName, "\\\\.\\COM%d", port);
+    HANDLE testHandle = CreateFileA(portName,
+                                   GENERIC_READ | GENERIC_WRITE,
+                                   0, NULL, OPEN_EXISTING, 0, NULL);
+    
+    if (testHandle == INVALID_HANDLE_VALUE) {
+        DWORD error = GetLastError();
+        cout << "\n*** FAILED TO OPEN COM PORT ***" << endl;
+        if (error == ERROR_ACCESS_DENIED) {
+            cout << "Reason: Port is already in use by another program" << endl;
+            cout << "Solution: Close any other programs using COM" << port << endl;
+        } else if (error == ERROR_FILE_NOT_FOUND) {
+            cout << "Reason: COM" << port << " does not exist" << endl;
+            cout << "Solution: Check Device Manager for correct port number" << endl;
+        } else {
+            cout << "Reason: Windows error code " << error << endl;
+            cout << "Solution: Check if RS422 adapter drivers are installed" << endl;
+        }
+        return false;
+    }
+    CloseHandle(testHandle);
+    cout << "  ✓ Port opened successfully" << endl;
+    
+    // Step 2: Configure connection
     Actuator::ConnectionConfig config;
     config.target_baud_rate_bps = 1250000;
     config.target_delay_us = 0;
@@ -118,15 +143,16 @@ bool testMotorConnection(int port) {
     motor.set_connection_config(config);
     motor.set_new_comport(port);
     
-    // Initialize port
-    cout << "Initializing serial port..." << endl;
+    // Step 3: Initialize MODBUS
+    cout << "Initializing MODBUS communication..." << endl;
     motor.init();
+    cout << "  ✓ MODBUS initialized" << endl;
     
-    // Enable communication
-    cout << "Enabling high-speed communication..." << endl;
+    // Step 4: Enable high-speed communication
+    cout << "Enabling high-speed streaming..." << endl;
     motor.enable();
     
-    // Try to connect for up to 5 seconds
+    // Step 5: Wait for motor response
     cout << "Waiting for motor response";
     int attempts = 0;
     const int max_attempts = 50; // 5 seconds at 100ms intervals
@@ -141,12 +167,22 @@ bool testMotorConnection(int port) {
     cout << endl;
     
     if (!motor.is_connected()) {
-        cout << "\n*** CONNECTION FAILED ***" << endl;
-        cout << "Possible issues:" << endl;
-        cout << "  1. Wrong COM port number" << endl;
-        cout << "  2. Motor not powered on" << endl;
-        cout << "  3. RS422 cable not connected" << endl;
-        cout << "  4. COM port in use by another program" << endl;
+        cout << "\n*** MOTOR CONNECTION FAILED ***" << endl;
+        cout << "Reason: No valid MODBUS response from motor after " << (max_attempts * 100 / 1000) << " seconds" << endl;
+        cout << "\nPossible causes:" << endl;
+        cout << "  1. Motor not powered on" << endl;
+        cout << "  2. RS422 cable not connected to motor" << endl;
+        cout << "  3. Wrong COM port (connected to different device)" << endl;
+        cout << "  4. RS422 A/B lines reversed" << endl;
+        cout << "  5. Baud rate mismatch (motor expects 1.25 Mbps)" << endl;
+        cout << "  6. Broken cable or bad connection" << endl;
+        
+        cout << "\nTroubleshooting steps:" << endl;
+        cout << "  - Verify motor power LED is on" << endl;
+        cout << "  - Check RS422 connections at both ends" << endl;
+        cout << "  - Try swapping A/B lines if using terminal blocks" << endl;
+        cout << "  - Confirm this is the RS422 adapter port, not a regular COM port" << endl;
+        
         return false;
     }
     
