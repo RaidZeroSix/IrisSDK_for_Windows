@@ -16,16 +16,18 @@
 #include "library_linker.h"
 #include <iostream>
 #include <windows.h>
+#include <conio.h>
 #include <cmath>
 
-using namespace std;
+using namespace std;    
 
 // Motor configuration
 Actuator motor{90, "Shock Tester Motor", 1};
 
 // GUI instance
 ShockTesterGUI gui;
-IrisControls4* IC4_virtual = &gui;
+static IC4WindowsTransport ic4_transport;
+IrisControls4* IC4_virtual = &ic4_transport;
 
 // State machine
 TestState current_state = IDLE;
@@ -118,6 +120,8 @@ vector<ShockTestProfile> test_profiles = {
 
 int selected_profile_index = 0;
 
+static bool use_ic4_gui = false;
+
 /**
  * Calculate velocity from position changes
  */
@@ -174,12 +178,12 @@ void applyForceForState() {
             
         case ACCELERATE:
             // Apply acceleration force
-            force_mN = current_profile.acceleration_force_N * 1000;
+            force_mN = (int)(current_profile.acceleration_force_N * 1000);
             break;
             
         case BRAKE:
             // Apply braking force
-            force_mN = current_profile.braking_force_N * 1000;
+            force_mN = (int)(current_profile.braking_force_N * 1000);
             break;
             
         case STABILIZE:
@@ -385,47 +389,92 @@ void onMotorConnect() {
     
     // Set safety limits
     motor.set_max_force(1000000); // 1000N max
-    motor.set_force_limit(800000); // 800N safety limit
     
     cout << "Motor initialized" << endl;
+}
+
+static void printProfiles() {
+    cout << "\nAvailable Test Profiles:\n";
+    for (size_t i = 0; i < test_profiles.size(); ++i) {
+        cout << "  [" << i << "] " << test_profiles[i].name << " - " << test_profiles[i].description << "\n";
+    }
+    cout << flush;
+}
+
+static void handleConsoleKeys() {
+    while (_kbhit()) {
+        int c = _getch();
+        if (c == 's' || c == 'S') {
+            if (!test_running) startTest();
+        } else if (c == 'x' || c == 'X') {
+            stopTest();
+        } else if (c == 'q' || c == 'Q') {
+            cout << "Quitting...\n";
+            exit(0);
+        }
+    }
 }
 
 /**
  * Main program loop
  */
 int main() {
-    int ic_port_number = 0;
     int motor_port_number = 0;
     
     cout << "=== Shock Tester Control System v2.0 ===" << endl;
     cout << "Force-Based Trapezoidal Motion Control" << endl;
     cout << endl;
-    
+
+    cout << "Use IrisControls GUI? (y/N): ";
+    char use_gui_resp = 'n';
+    cin >> use_gui_resp;
+    use_ic4_gui = (use_gui_resp == 'y' || use_gui_resp == 'Y');
+
     cout << "Enter the COM port number for the motor (RS422): ";
     cin >> motor_port_number;
-    
-    cout << "Enter the virtual COM port number for IrisControls: ";
-    cin >> ic_port_number;
-    
+
+    int ic_port_number = 0;
+    if (use_ic4_gui) {
+        cout << "Enter the virtual COM port number for IrisControls: ";
+        cin >> ic_port_number;
+    }
+
     // Configure high-speed communication
     Actuator::ConnectionConfig connection_config;
     connection_config.target_baud_rate_bps = 1250000;
     connection_config.target_delay_us = 0;
-    
+
     // Initialize motor
     motor.set_connection_config(connection_config);
     motor.set_new_comport(motor_port_number);
     motor.init();
     motor.enable();
-    
-    // Initialize GUI
-    IC4_virtual->setup(ic_port_number);
-    
+
+    if (use_ic4_gui) {
+        // Initialize GUI transport and page
+        IC4_virtual->setup(ic_port_number);
+        cout << "IrisControls mode: start the IrisControls app and connect to COM" << ic_port_number << "." << endl;
+    } else {
+        // Headless console setup
+        printProfiles();
+        cout << "Select profile index: ";
+        cin >> selected_profile_index;
+        if (selected_profile_index < 0 || selected_profile_index >= (int)test_profiles.size()) {
+            selected_profile_index = 0;
+        }
+        cout << "Enter number of repetitions: ";
+        cin >> total_repetitions;
+        cout << "Controls: [s]tart  e[x]it/stop  [q]uit" << endl;
+    }
+
     cout << endl;
-    cout << "System ready. Use IrisControls to configure and run tests." << endl;
-    cout << "Press Ctrl+C to exit" << endl;
+    cout << "System ready." << endl;
+    cout << "Press Ctrl+C to exit or press 'q'." << endl;
     cout << endl;
-    
+
+    static u64 last_gui_update_us = 0;
+    u64 last_status_print_ms = GetTickCount64();
+
     while (1) {
         // Update measurements
         current_position_mm = motor.get_position_um() / 1000.0f;
@@ -455,19 +504,37 @@ int main() {
         
         motor.run_in();
         motor.run_out();
-        
-        // GUI updates
-        gui.check();
-        gui.send();
-        
-        if (gui.new_connection()) {
-            gui.initiate();
-        }
-        
-        if (gui.is_connected() && (millis() - last_gui_update > GUI_UPDATE_PERIOD)) {
-            last_gui_update = millis();
-            gui.run();
-            gui.end_of_frame();
+
+        if (use_ic4_gui) {
+            // GUI updates
+            IC4_virtual->check();
+            IC4_virtual->send();
+            
+            if (IC4_virtual->new_connection()) {
+                gui.initiate();
+            }
+            
+            if (IC4_virtual->is_connected() && (IC4_virtual->system_time() - last_gui_update_us > (u64)GUI_UPDATE_PERIOD * 1000ULL)) {
+                last_gui_update_us = IC4_virtual->system_time();
+                gui.run();
+                IC4_virtual->end_of_frame();
+            }
+        } else {
+            // Console interactions
+            handleConsoleKeys();
+
+            // Periodic status print
+            u64 now_ms = GetTickCount64();
+            if (now_ms - last_status_print_ms > 250) {
+                last_status_print_ms = now_ms;
+                cout << "State=" << getStateName(current_state)
+                     << " Pos=" << current_position_mm << "mm"
+                     << " Vel=" << current_velocity_mms << "mm/s"
+                     << " Force=" << current_force_N << "N"
+                     << " Rep=" << current_repetition << "/" << total_repetitions
+                     << (emergency_stop ? " [EMERGENCY STOP]" : "")
+                     << "\r" << flush;
+            }
         }
     }
     

@@ -13,6 +13,8 @@
 #include <string>
 #include <vector>
 #include <cmath>
+#include <map>
+#include <windows.h>
 
 // State machine states
 enum TestState {
@@ -121,170 +123,132 @@ extern SimplePID position_pid;
  * @class ShockTesterGUI
  * @brief Custom GUI for shock tester control interface
  */
-class ShockTesterGUI : public IrisControls4 {
+class ShockTesterGUI {
 private:
+    // Pages
+    GUI_Page main_page;
+    GUI_Page custom_page;
+
     // GUI Elements - Main Control Panel
-    FlexButton start_button{"START_TEST", "Start Test", 200, 60};
-    FlexButton stop_button{"STOP_TEST", "EMERGENCY STOP", 200, 60};
+    FlexButton start_button;
+    FlexButton stop_button;
     
     // Test Selection
-    FlexDropdown test_selector{"TEST_SELECT", "Select Test Profile", 300};
-    FlexLabel test_description{"TEST_DESC", "Test Description", 400};
+    FlexDropdown test_selector;
+    std::vector<MenuOption> test_options;               // persistent options
+
+    // Map MenuOption id -> profile index
+    std::map<unsigned int, int> option_to_index;
+
+    FlexLabel test_description;
     
     // Test Parameters Display
-    FlexData accel_force_display{"ACCEL_FORCE", "Accel Force (N)", "0", 120};
-    FlexData brake_force_display{"BRAKE_FORCE", "Brake Force (N)", "0", 120};
-    FlexData critical_pos_display{"CRIT_POS", "Critical Pos (mm)", "0", 120};
+    FlexData accel_force_display;
+    FlexData brake_force_display;
+    FlexData critical_pos_display;
     
     // Custom Profile Editors (for custom profile only)
-    FlexSlider accel_force_slider{"ACCEL_SLIDER", "Acceleration Force (N)", 10, 500, 100, 300};
-    FlexSlider brake_force_slider{"BRAKE_SLIDER", "Braking Force (N)", -500, -10, -200, 300};
-    FlexSlider critical_pos_slider{"CRIT_POS_SLIDER", "Critical Position (mm)", 5, 50, 25, 300};
-    FlexSlider stabilize_pos_slider{"STAB_POS_SLIDER", "Stabilize Position (mm)", 0, 30, 10, 300};
+    FlexSlider accel_force_slider;
+    FlexSlider brake_force_slider;
+    FlexSlider critical_pos_slider;
+    FlexSlider stabilize_pos_slider;
     
     // Test Control
-    FlexSlider repetition_slider{"REPETITIONS", "Number of Repetitions", 1, 100, 1, 250};
-    FlexData repetition_display{"REP_DISPLAY", "Current Repetition", "0 / 0", 150};
+    FlexSlider repetition_slider;
+    FlexData repetition_display;
     
     // Motor Status Display
-    FlexLabel motor_status{"MOTOR_STATUS", "Motor Status", 200};
-    FlexData position_display{"POSITION", "Position (mm)", "0.0", 100};
-    FlexData force_display{"FORCE", "Force (N)", "0.0", 100};
-    FlexData velocity_display{"VELOCITY", "Velocity (mm/s)", "0.0", 100};
-    FlexData temperature_display{"TEMP", "Temperature (°C)", "0.0", 100};
+    FlexLabel motor_status;
+    FlexData position_display;
+    FlexData force_display;
+    FlexData velocity_display;
+    FlexData temperature_display;
     
     // State Machine Status
-    FlexLabel state_display{"STATE", "Current State", 200};
-    FlexData max_force_display{"MAX_FORCE", "Peak Force (N)", "0.0", 120};
+    FlexLabel state_display;
+    FlexData max_force_display;
     
     // Test Status
-    FlexLabel test_status{"TEST_STATUS", "Test Status", 300};
-    FlexData test_name_display{"TEST_NAME", "Current Test", "None", 200};
+    FlexLabel test_status;
+    FlexLabel test_name_display;
     
     // Real-time Plots
-    FlexPlot position_plot{"POS_PLOT", "Position (mm)", -10, 60, 400, 200};
-    FlexPlot force_plot{"FORCE_PLOT", "Force (N)", -600, 600, 400, 200};
+    FlexPlot position_plot;
+    FlexPlot force_plot;
+    Dataset position_dataset;
+    Dataset force_dataset;
     
     // Safety
-    FlexLabel safety_status{"SAFETY", "Safety Status", 200};
-    FlexButton reset_button{"RESET", "Reset System", 120, 40};
+    FlexLabel safety_status;
+    FlexButton reset_button;
     
 public:
     /**
      * Initialize GUI elements when connected to IrisControls
      */
     void initiate() {
-        // Main page
-        add_page("main", "Shock Tester Control");
+        // Add pages
+        main_page.add();
+        custom_page.add();
         
-        // Control Section
-        add_info_box("control_box", "Test Control", 0);
-        add(start_button);
-        add_to_info_box("control_box");
-        start_button.set_color(0, 200, 0);
-        
-        add(stop_button);
-        add_to_info_box("control_box");
-        stop_button.set_color(200, 0, 0);
+        // Control Section (top-left)
+        start_button.add(&main_page, "Start Test", -1, 0, 0, 2, 4);
+        stop_button.add(&main_page, "EMERGENCY STOP", -1, 0, 4, 2, 4);
         
         // Test Selection
-        add_info_box("test_select_box", "Test Selection", 1);
+        test_selector.add(&main_page, 2, 0, 2, 8, 0);
         
-        test_selector.clear();
-        for (const auto& test : test_profiles) {
-            test_selector.add_option(test.name.c_str());
+        // Populate dropdown options
+        test_options.resize(test_profiles.size());
+        option_to_index.clear();
+        for (size_t i = 0; i < test_profiles.size(); ++i) {
+            test_selector.add_option(&test_options[i], test_profiles[i].name.c_str());
+            option_to_index[(unsigned int)test_options[i].id()] = static_cast<int>(i);
         }
-        add(test_selector);
-        add_to_info_box("test_select_box");
         
-        add(test_description);
-        add_to_info_box("test_select_box");
+        test_description.add(&main_page, "Test Description:", 4, 0, 1, 8, 0);
         
-        // Test Parameters Display
-        add(accel_force_display);
-        add_to_info_box("test_select_box");
-        add(brake_force_display);
-        add_to_info_box("test_select_box");
-        add(critical_pos_display);
-        add_to_info_box("test_select_box");
+        // Test Parameters Display (cast args to disambiguate)
+        accel_force_display.add(&main_page, "Accel Force (N)", 5, 0, 1, 2, (int)0, (u16)1, "N", (u32)FlexData::UNITS);
+        brake_force_display.add(&main_page, "Brake Force (N)", 5, 2, 1, 2, (int)0, (u16)1, "N", (u32)FlexData::UNITS);
+        critical_pos_display.add(&main_page, "Critical Pos (mm)", 5, 4, 1, 2, (int)0, (u16)1, "mm", (u32)FlexData::UNITS);
         
-        add(repetition_slider);
-        add_to_info_box("test_select_box");
+        // Repetitions
+        repetition_slider.add(&main_page, "Repetitions", 6, 0, 1, 4, 1, 100, 1, (u16)1, "reps", FlexSlider::ALLOW_INPUT);
+        repetition_display.add(&main_page, "Current Repetition", 6, 4, 1, 2, (int)0, (u16)1, "reps", (u32)0);
         
         // Status Display
-        add_info_box("status_box", "System Status", 2);
+        motor_status.add(&main_page, "Motor: Disconnected", 7, 0, 1, 4, 0);
+        state_display.add(&main_page, "State: IDLE", 7, 4, 1, 4, 0);
         
-        add(motor_status);
-        add_to_info_box("status_box");
+        position_display.add(&main_page, "Position (mm)", 8, 0, 1, 2, (int)0, (u16)1, "mm", (u32)FlexData::UNITS);
+        force_display.add(&main_page, "Force (N)", 8, 2, 1, 2, (int)0, (u16)1, "N", (u32)FlexData::UNITS);
+        velocity_display.add(&main_page, "Velocity (mm/s)", 8, 4, 1, 2, (int)0, (u16)1, "mm/s", (u32)FlexData::UNITS);
+        temperature_display.add(&main_page, "Temperature (C)", 8, 6, 1, 2, (int)0, (u16)1, "C", (u32)FlexData::UNITS);
         
-        add(state_display);
-        add_to_info_box("status_box");
-        
-        add(position_display);
-        add_to_info_box("status_box");
-        
-        add(force_display);
-        add_to_info_box("status_box");
-        
-        add(velocity_display);
-        add_to_info_box("status_box");
-        
-        add(temperature_display);
-        add_to_info_box("status_box");
-        
-        add(repetition_display);
-        add_to_info_box("status_box");
-        
-        add(max_force_display);
-        add_to_info_box("status_box");
+        max_force_display.add(&main_page, "Peak Force (N)", 9, 0, 1, 2, (int)0, (u16)1, "N", (u32)FlexData::UNITS);
         
         // Test Progress
-        add_info_box("progress_box", "Test Progress", 3);
-        
-        add(test_status);
-        add_to_info_box("progress_box");
-        
-        add(test_name_display);
-        add_to_info_box("progress_box");
+        test_status.add(&main_page, "Status: Ready", 10, 0, 1, 4, 0);
+        test_name_display.add(&main_page, "Current Test: None", 10, 4, 1, 4, 0);
         
         // Plots
-        add_info_box("plot_box", "Real-time Data", 4);
+        position_plot.add(&main_page, "Position (mm)", 11, 0, 4, 8, -10.0f, 60.0f, 0);
+        force_plot.add(&main_page, "Force (N)", 15, 0, 4, 8, -600.0f, 600.0f, 0);
         
-        add(position_plot);
-        add_to_info_box("plot_box");
-        position_plot.set_color(0, 0, 255);
-        
-        add(force_plot);
-        add_to_info_box("plot_box");
-        force_plot.set_color(255, 0, 0);
+        // Datasets for plots
+        position_dataset.add(&position_plot, "Position", "t", "mm", 0);
+        force_dataset.add(&force_plot, "Force", "t", "N", 0);
         
         // Safety
-        add_info_box("safety_box", "Safety", 5);
+        safety_status.add(&main_page, "Safety: OK", 19, 0, 1, 4, 0);
+        reset_button.add(&main_page, "Reset System", -1, 19, 4, 1, 2);
         
-        add(safety_status);
-        add_to_info_box("safety_box");
-        
-        add(reset_button);
-        add_to_info_box("safety_box");
-        
-        // Custom Profile Page
-        add_page("custom", "Custom Profile");
-        
-        add_info_box("custom_box", "Custom Test Parameters", 0);
-        
-        add(accel_force_slider);
-        add_to_info_box("custom_box");
-        
-        add(brake_force_slider);
-        add_to_info_box("custom_box");
-        
-        add(critical_pos_slider);
-        add_to_info_box("custom_box");
-        
-        add(stabilize_pos_slider);
-        add_to_info_box("custom_box");
-        
-        updateStatus();
+        // Custom Profile Page elements
+        accel_force_slider.add(&custom_page, "Acceleration Force (N)", 0, 0, 1, 6, 10, 500, 100, (u16)1, "N", FlexSlider::ALLOW_INPUT);
+        brake_force_slider.add(&custom_page, "Braking Force (N)", 1, 0, 1, 6, -500, -10, -200, (u16)1, "N", FlexSlider::ALLOW_INPUT);
+        critical_pos_slider.add(&custom_page, "Critical Position (mm)", 2, 0, 1, 6, 5, 50, 25, (u16)1, "mm", FlexSlider::ALLOW_INPUT);
+        stabilize_pos_slider.add(&custom_page, "Stabilize Position (mm)", 3, 0, 1, 6, 0, 30, 10, (u16)1, "mm", FlexSlider::ALLOW_INPUT);
     }
     
     /**
@@ -294,15 +258,19 @@ public:
         // Handle buttons
         if (start_button.pressed()) {
             if (!test_running) {
-                total_repetitions = (int)repetition_slider.get_value();
-                selected_profile_index = test_selector.get_selected_index();
+                total_repetitions = (int)repetition_slider.get();
+                // Selected profile from dropdown
+                int opt_id = test_selector.get();
+                if (option_to_index.count((unsigned int)opt_id)) {
+                    selected_profile_index = option_to_index[(unsigned int)opt_id];
+                }
                 
                 // Update custom profile if selected
-                if (selected_profile_index == test_profiles.size() - 1) {
-                    test_profiles[selected_profile_index].acceleration_force_N = accel_force_slider.get_value();
-                    test_profiles[selected_profile_index].braking_force_N = brake_force_slider.get_value();
-                    test_profiles[selected_profile_index].critical_position_mm = critical_pos_slider.get_value();
-                    test_profiles[selected_profile_index].stabilize_position_mm = stabilize_pos_slider.get_value();
+                if (selected_profile_index == (int)test_profiles.size() - 1) {
+                    test_profiles[selected_profile_index].acceleration_force_N = accel_force_slider.get_f();
+                    test_profiles[selected_profile_index].braking_force_N = brake_force_slider.get_f();
+                    test_profiles[selected_profile_index].critical_position_mm = critical_pos_slider.get_f();
+                    test_profiles[selected_profile_index].stabilize_position_mm = stabilize_pos_slider.get_f();
                 }
                 
                 startTest();
@@ -313,27 +281,26 @@ public:
             stopTest();
         }
         
-        // Update test selection
-        if (test_selector.changed()) {
-            selected_profile_index = test_selector.get_selected_index();
-            if (selected_profile_index >= 0 && selected_profile_index < test_profiles.size()) {
-                ShockTestProfile& prof = test_profiles[selected_profile_index];
-                test_description.set(prof.description.c_str());
-                
-                char buffer[50];
-                sprintf(buffer, "%.1f", prof.acceleration_force_N);
-                accel_force_display.set(buffer);
-                sprintf(buffer, "%.1f", prof.braking_force_N);
-                brake_force_display.set(buffer);
-                sprintf(buffer, "%.1f", prof.critical_position_mm);
-                critical_pos_display.set(buffer);
-                
-                // Update sliders if custom profile
-                if (selected_profile_index == test_profiles.size() - 1) {
-                    accel_force_slider.set_value(prof.acceleration_force_N);
-                    brake_force_slider.set_value(prof.braking_force_N);
-                    critical_pos_slider.set_value(prof.critical_position_mm);
-                    stabilize_pos_slider.set_value(prof.stabilize_position_mm);
+        // Update test selection on change
+        if (test_selector.new_value_received()) {
+            int opt_id = test_selector.get();
+            if (option_to_index.count((unsigned int)opt_id)) {
+                selected_profile_index = option_to_index[(unsigned int)opt_id];
+                if (selected_profile_index >= 0 && selected_profile_index < (int)test_profiles.size()) {
+                    ShockTestProfile& prof = test_profiles[selected_profile_index];
+                    test_description.rename(prof.description.c_str());
+                    
+                    accel_force_display.update(prof.acceleration_force_N);
+                    brake_force_display.update(prof.braking_force_N);
+                    critical_pos_display.update(prof.critical_position_mm);
+                    
+                    // Update sliders if custom profile
+                    if (selected_profile_index == (int)test_profiles.size() - 1) {
+                        accel_force_slider.update(prof.acceleration_force_N);
+                        brake_force_slider.update(prof.braking_force_N);
+                        critical_pos_slider.update(prof.critical_position_mm);
+                        stabilize_pos_slider.update(prof.stabilize_position_mm);
+                    }
                 }
             }
         }
@@ -349,92 +316,103 @@ private:
     void updateStatus() {
         // Motor status
         if (motor.is_connected()) {
-            motor_status.set("Motor Connected");
-            motor_status.set_color(0, 200, 0);
+            motor_status.rename("Motor: Connected");
             
-            char buffer[50];
+            position_display.update(current_position_mm);
+            force_display.update(current_force_N);
+            velocity_display.update(current_velocity_mms);
+            temperature_display.update(motor.get_temperature_C());
             
-            sprintf(buffer, "%.2f", current_position_mm);
-            position_display.set(buffer);
-            
-            sprintf(buffer, "%.2f", current_force_N);
-            force_display.set(buffer);
-            
-            sprintf(buffer, "%.1f", current_velocity_mms);
-            velocity_display.set(buffer);
-            
-            sprintf(buffer, "%.1f", motor.get_temperature());
-            temperature_display.set(buffer);
-            
-            sprintf(buffer, "%.1f", max_force_recorded);
-            max_force_display.set(buffer);
+            max_force_display.update(max_force_recorded);
         } else {
-            motor_status.set("Motor Disconnected");
-            motor_status.set_color(200, 0, 0);
+            motor_status.rename("Motor: Disconnected");
         }
         
         // State display
-        state_display.set(getStateName(current_state));
-        switch(current_state) {
-            case IDLE:
-                state_display.set_color(100, 100, 100);
-                break;
-            case HOMING:
-                state_display.set_color(0, 100, 200);
-                break;
-            case ACCELERATE:
-                state_display.set_color(0, 200, 0);
-                break;
-            case BRAKE:
-                state_display.set_color(200, 200, 0);
-                break;
-            case SHOCK_DETECTED:
-                state_display.set_color(255, 100, 0);
-                break;
-            case STABILIZE:
-                state_display.set_color(0, 150, 150);
-                break;
-            case COMPLETE:
-                state_display.set_color(0, 200, 100);
-                break;
+        {
+            std::string s = std::string("State: ") + getStateName(current_state);
+            state_display.rename(s.c_str());
         }
         
         // Test status
         if (test_running) {
-            test_status.set("Test Running");
-            test_status.set_color(0, 200, 0);
+            test_status.rename("Status: Test Running");
             
-            char rep_buffer[50];
-            sprintf(rep_buffer, "%d / %d", current_repetition, total_repetitions);
-            repetition_display.set(rep_buffer);
+            // display repetitions as number using the label next to slider
+            repetition_display.update(current_repetition);
             
-            test_name_display.set(current_profile.name.c_str());
+            {
+                std::string tn = std::string("Current Test: ") + current_profile.name;
+                test_name_display.rename(tn.c_str());
+            }
             
-            start_button.set_enabled(false);
-            test_selector.set_enabled(false);
-            repetition_slider.set_enabled(false);
+            start_button.disable(true);
+            test_selector.disable(true);
+            repetition_slider.disable(true);
         } else {
-            test_status.set("Ready");
-            test_status.set_color(100, 100, 100);
+            test_status.rename("Status: Ready");
             
-            start_button.set_enabled(true);
-            test_selector.set_enabled(true);
-            repetition_slider.set_enabled(true);
+            start_button.disable(false);
+            test_selector.disable(false);
+            repetition_slider.disable(false);
         }
         
         // Safety
         if (emergency_stop) {
-            safety_status.set("EMERGENCY STOP");
-            safety_status.set_color(200, 0, 0);
+            safety_status.rename("Safety: EMERGENCY STOP");
         } else {
-            safety_status.set("System Safe");
-            safety_status.set_color(0, 200, 0);
+            safety_status.rename("Safety: OK");
         }
     }
     
     void updatePlots() {
-        position_plot.add_sample(current_position_mm);
-        force_plot.add_sample(current_force_N);
+        // add latest samples using IC4 timebase in milliseconds
+        float t_ms = (float)(IC4_virtual->system_time() / 1000.0);
+        position_dataset.add_data(t_ms, current_position_mm);
+        force_dataset.add_data(t_ms, current_force_N);
+    }
+};
+
+/**
+ * @class IC4WindowsTransport
+ * @brief Minimal IrisControls4 transport implementation for Windows host
+ */
+class IC4WindowsTransport : public IrisControls4 {
+    char print_buffer[MAX_VAR_STR_LENGTH];
+public:
+    void send() override {
+        // Stub: transport handled by host application; nothing to flush here.
+    }
+    u64 system_time() override {
+        LARGE_INTEGER freq, ticks;
+        if (!QueryPerformanceFrequency(&freq)) {
+            return (u64)GetTickCount64() * 1000ULL;
+        }
+        QueryPerformanceCounter(&ticks);
+        return (u64)((ticks.QuadPart * 1000000ULL) / (u64)freq.QuadPart);
+    }
+    void handle_eot() override {}
+#ifdef WINDOWS
+    void setup(int comport) override {
+        (void)comport;
+        setup_sucess = true;
+    }
+#endif
+    const char* val_to_str(int d) override {
+        snprintf(print_buffer, sizeof(print_buffer), "%d", d);
+        return print_buffer;
+    }
+    const char* val_to_str(unsigned int d) override {
+        snprintf(print_buffer, sizeof(print_buffer), "%u", d);
+        return print_buffer;
+    }
+    const char* val_to_str(u64 d) override {
+        snprintf(print_buffer, sizeof(print_buffer), "%llu", (unsigned long long)d);
+        return print_buffer;
+    }
+    const char* val_to_str(float f) override {
+        snprintf(print_buffer, sizeof(print_buffer), "%g", f);
+        return print_buffer;
     }
 };
 
