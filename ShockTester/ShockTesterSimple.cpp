@@ -112,7 +112,7 @@ bool testMotorConnection(int port) {
     
     // Step 1: Test if port can be opened
     char portName[20];
-    sprintf(portName, "\\\\.\\COM%d", port);
+    sprintf_s(portName, sizeof(portName), "\\\\.\\COM%d", port);
     HANDLE testHandle = CreateFileA(portName,
                                    GENERIC_READ | GENERIC_WRITE,
                                    0, NULL, OPEN_EXISTING, 0, NULL);
@@ -194,7 +194,7 @@ bool testMotorConnection(int port) {
     // Try to read some basic registers
     motor.get_position_um();
     motor.get_force_mN();
-    motor.get_temperature();
+    motor.get_temperature_C();
     
     // Give it a moment to populate
     Sleep(100);
@@ -205,7 +205,7 @@ bool testMotorConnection(int port) {
     cout << "\nMotor Status:" << endl;
     cout << "  Position: " << motor.get_position_um() / 1000.0f << " mm" << endl;
     cout << "  Force: " << motor.get_force_mN() / 1000.0f << " N" << endl;
-    cout << "  Temperature: " << motor.get_temperature() << " C" << endl;
+    cout << "  Temperature: " << (int)motor.get_temperature_C() << " C" << endl;
     
     // Test mode switching
     cout << "\nTesting mode control..." << endl;
@@ -480,7 +480,7 @@ vector<int> getAvailableCOMPorts() {
         // Test COM1 through COM256 (maximum Windows allows)
         char portName[20];
         for (int i = 1; i <= 256; i++) {
-            sprintf(portName, "\\\\.\\COM%d", i);
+            sprintf_s(portName, sizeof(portName), "\\\\.\\COM%d", i);
             
             HANDLE hPort = CreateFileA(portName,
                                       GENERIC_READ | GENERIC_WRITE,
@@ -533,7 +533,7 @@ int main() {
         
         // Try to identify if it's in use
         char portName[20];
-        sprintf(portName, "\\\\.\\COM%d", available_ports[i]);
+        sprintf_s(portName, sizeof(portName), "\\\\.\\COM%d", available_ports[i]);
         HANDLE hPort = CreateFileA(portName,
                                   GENERIC_READ | GENERIC_WRITE,
                                   0, NULL, OPEN_EXISTING, 0, NULL);
