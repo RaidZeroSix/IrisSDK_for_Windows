@@ -1,36 +1,38 @@
-# Shock Tester Control System v2.0
+# Shock Tester Control System - Simple Console Version
 
-A GUI application for controlling Iris Dynamics Orca motors to generate controlled shocks through force-based trapezoidal motion profiles.
+A standalone console application for controlling Iris Dynamics Orca motors to generate controlled shocks through force-based trapezoidal motion profiles.
 
 ## Features
 
+- **Standalone Console Application** - No external GUI dependencies
+- **Connection Verification** - Comprehensive motor connection testing before operation
 - **Force-Based Control** - Uses force commands exclusively with position feedback
 - **State Machine Control** - Automated sequence: Home → Accelerate → Brake → Shock → Stabilize
 - **Trapezoidal Motion Profile** - Specify acceleration and braking forces in Newtons
-- **Simple operator interface** - Select test profile and press start
-- **Multiple repetitions** - Run tests multiple times automatically
-- **Real-time monitoring** - View position, force, velocity, and state
-- **Custom profiles** - Adjust force parameters through GUI
-- **Safety controls** - Emergency stop and position limits
-- **IrisControls integration** - Full GUI with real-time plots
+- **Simple Keyboard Controls** - [S]tart, [X]Stop, [Q]uit
+- **Multiple Repetitions** - Run tests multiple times automatically
+- **Real-Time Status Display** - Position, force, velocity, and state updated 10Hz
+- **Custom Profiles** - Input your own force parameters
+- **Safety Controls** - Emergency stop and connection monitoring
 
 ## Setup
 
 1. **Hardware Setup**
    - Connect Orca motor via RS422 serial connection
-   - Set COM port latency to 1ms for optimal performance
-   - Install com0com virtual COM port driver for IrisControls
+   - Power on the motor
+   - Note the COM port number assigned to your RS422 adapter
 
 2. **Build the Application**
    - Open `ShockTester.sln` in Visual Studio
-   - Build in Release mode for best performance
-   - Ensure the IrisSDK libraries are properly linked
+   - Build in Release mode (x64) for best performance
+   - Executable will be in `x64\Release\ShockTester.exe`
 
 3. **Running the Application**
-   - Launch the executable
-   - Enter the motor COM port number (RS422 connection)
-   - Enter the virtual COM port number for IrisControls
-   - Open IrisControls4 and connect to the virtual port
+   - Launch ShockTester.exe
+   - Enter the motor COM port number when prompted
+   - System will verify connection with detailed diagnostics
+   - Select test profile and number of repetitions
+   - Press 'S' to start test
 
 ## How It Works
 

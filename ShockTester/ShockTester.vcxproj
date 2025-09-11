@@ -147,10 +147,9 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="ShockTesterControl.cpp" />
+    <ClCompile Include="ShockTesterSimple.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="ShockTesterControl.h" />
     <ClInclude Include="ShockTestProfiles.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
