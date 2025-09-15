@@ -391,7 +391,7 @@ void MotionController::applyForce(float force_N) {
     commanded_force_N = force_N;
     
     // Ensure motor is awake and in force mode
-    MotorMode current_mode = motor.get_mode();
+    Actuator::MotorMode current_mode = motor.get_mode();
     if (current_mode == Actuator::SleepMode || current_mode != Actuator::ForceMode) {
         cout << "Current mode: " << current_mode << ", switching to ForceMode..." << endl;
         motor.enable();  // Wake up the motor
@@ -399,7 +399,7 @@ void MotionController::applyForce(float force_N) {
         
         // Verify mode switch
         Sleep(10);  // Give time for mode switch
-        MotorMode new_mode = motor.get_mode();
+        Actuator::MotorMode new_mode = motor.get_mode();
         cout << "New mode: " << new_mode << " (ForceMode = " << Actuator::ForceMode << ")" << endl;
     }
     
