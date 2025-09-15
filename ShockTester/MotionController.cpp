@@ -393,24 +393,47 @@ void MotionController::applyForce(float force_N) {
     // Ensure motor is awake and in force mode
     Actuator::MotorMode current_mode = motor.get_mode();
     if (current_mode == Actuator::SleepMode || current_mode != Actuator::ForceMode) {
-        cout << "Current mode: " << current_mode << ", switching to ForceMode..." << endl;
-        motor.enable();  // Wake up the motor
-        motor.set_mode(Actuator::ForceMode);
+        cout << "Mode change needed. Current mode: " << current_mode << endl;
         
-        // Verify mode switch
-        Sleep(10);  // Give time for mode switch
+        // Try to enable and set mode
+        motor.enable();
+        cout << "Called motor.enable()" << endl;
+        
+        motor.set_mode(Actuator::ForceMode);
+        cout << "Called set_mode(ForceMode)" << endl;
+        
+        // Wait and verify
+        Sleep(50);  // Give more time for mode switch
+        motor.run_in();
+        motor.run_out();
+        
         Actuator::MotorMode new_mode = motor.get_mode();
-        cout << "New mode: " << new_mode << " (ForceMode = " << Actuator::ForceMode << ")" << endl;
+        cout << "After switch - Mode: " << new_mode << " (should be " << Actuator::ForceMode << ")" << endl;
+        
+        if (new_mode != Actuator::ForceMode) {
+            cout << "ERROR: Failed to switch to ForceMode!" << endl;
+        }
     }
     
     int force_mN = (int)(force_N * 1000.0f);
     motor.set_force_mN(force_mN);
     
-    // Debug output
+    // Comprehensive debug output
     static int debug_counter = 0;
     if (++debug_counter % 10 == 0) {  // Every 10 calls
         float actual_force = motor.get_force_mN() / 1000.0f;
-        cout << "Commanded: " << force_N << " N, Actual: " << actual_force << " N" << endl;
+        bool is_enabled = motor.is_enabled();
+        Actuator::MotorMode mode = motor.get_mode();
+        float pos = motor.get_position_um() / 1000.0f;
+        
+        cout << "=== Motor Status ===" << endl;
+        cout << "  Commanded: " << force_N << " N (" << force_mN << " mN)" << endl;
+        cout << "  Actual: " << actual_force << " N" << endl;
+        cout << "  Position: " << pos << " mm" << endl;
+        cout << "  Mode: " << mode << endl;
+        cout << "  Enabled: " << is_enabled << endl;
+        cout << "  Connected: " << motor.is_connected() << endl;
+        cout << "===================" << endl;
     }
 }
 

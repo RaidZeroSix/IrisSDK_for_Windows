@@ -510,8 +510,31 @@ bool ConnectToMotor(int port) {
                 
                 // Enable and configure motor
                 g_motor->enable();
+                cout << "Motor enabled" << endl;
+                
+                // Set to force mode
                 g_motor->set_mode(Actuator::ForceMode);
-                g_motor->set_max_force(1000000); // 1000 mN = 1000N max
+                Sleep(100); // Wait for mode change
+                g_motor->run_in();
+                g_motor->run_out();
+                
+                // Verify mode
+                Actuator::MotorMode mode = g_motor->get_mode();
+                cout << "Motor mode after setup: " << mode << " (ForceMode = " << Actuator::ForceMode << ")" << endl;
+                
+                // Set max force
+                g_motor->set_max_force(1000000); // 1000N max
+                cout << "Max force set to 1000N" << endl;
+                
+                // Test force command
+                cout << "Testing force command..." << endl;
+                g_motor->set_force_mN(10000); // 10N test
+                Sleep(100);
+                g_motor->run_in();
+                g_motor->run_out();
+                float test_force = g_motor->get_force_mN() / 1000.0f;
+                cout << "Test force readback: " << test_force << " N (commanded 10N)" << endl;
+                g_motor->set_force_mN(0); // Clear test force
                 
                 // Test communication
                 float pos = g_motor->get_position_um() / 1000.0f;
