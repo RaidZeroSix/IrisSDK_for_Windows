@@ -159,18 +159,35 @@ int main(int argc, char** argv) {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        // Update controller if connected
-        if (g_connected && g_controller) {
-            g_controller->update();
-            UpdatePlotData();
+        // Update motor communication if connected
+        if (g_connected && g_motor) {
+            // Process MODBUS communication
+            g_motor->run_in();
+            g_motor->run_out();
             
-            // Check for test completion
-            static bool was_running = false;
-            bool is_running = g_controller->isTestRunning();
-            if (was_running && !is_running) {
-                ShowSuccess("Test completed!");
+            // Debug output every second
+            static uint32_t last_debug = 0;
+            uint32_t now = GetTickCount();
+            if (now - last_debug > 1000) {
+                float pos = g_motor->get_position_um() / 1000.0f;
+                float force = g_motor->get_force_mN() / 1000.0f;
+                cout << "Debug - Pos: " << pos << " mm, Force: " << force << " N, Connected: " << g_motor->is_connected() << endl;
+                last_debug = now;
             }
-            was_running = is_running;
+            
+            // Update controller
+            if (g_controller) {
+                g_controller->update();
+                UpdatePlotData();
+                
+                // Check for test completion
+                static bool was_running = false;
+                bool is_running = g_controller->isTestRunning();
+                if (was_running && !is_running) {
+                    ShowSuccess("Test completed!");
+                }
+                was_running = is_running;
+            }
         }
 
         // Show appropriate window
@@ -489,8 +506,16 @@ bool ConnectToMotor(int port) {
             
             if (g_motor->is_connected()) {
                 // Success!
+                cout << "Motor connected! Setting up..." << endl;
+                
+                // Enable and configure motor
+                g_motor->enable();
                 g_motor->set_mode(Actuator::ForceMode);
-                g_motor->set_max_force(1000000); // 1000N max
+                g_motor->set_max_force(1000000); // 1000 mN = 1000N max
+                
+                // Test communication
+                float pos = g_motor->get_position_um() / 1000.0f;
+                cout << "Initial position: " << pos << " mm" << endl;
                 
                 // Create controller
                 g_controller = new MotionController(*g_motor);
@@ -498,8 +523,8 @@ bool ConnectToMotor(int port) {
                 g_connected = true;
                 ShowSuccess("Connected to motor!");
                 
-                // Start homing automatically
-                g_controller->startHoming();
+                // Don't start homing automatically - let user initiate
+                cout << "Motor ready. Press START TEST to begin homing." << endl;
                 
                 return true;
             }
