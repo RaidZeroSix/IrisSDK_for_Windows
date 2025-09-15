@@ -7,6 +7,8 @@
 #include "imgui/backends/imgui_impl_glfw.h"
 #include "imgui/backends/imgui_impl_opengl3.h"
 #include "imgui/implot.h"
+
+// GLFW includes OpenGL headers
 #include <GLFW/glfw3.h>
 
 #include "MotionController.h"
@@ -16,7 +18,7 @@
 
 #include <iostream>
 #include <vector>
-#include <deque>
+#include <vector>
 #include <string>
 #include <algorithm>
 #include <windows.h>
@@ -41,10 +43,11 @@ static int g_selected_port = -1;
 
 // Plot data (3 second window at 100Hz display rate)
 static const int PLOT_POINTS = 300;
-static deque<float> g_time_data;
-static deque<float> g_position_data;
-static deque<float> g_force_data;
+static vector<float> g_time_data;
+static vector<float> g_position_data;
+static vector<float> g_force_data;
 static float g_plot_time = 0;
+static int g_plot_index = 0;
 
 // Status colors
 static ImVec4 COLOR_GREEN = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
@@ -133,10 +136,13 @@ int main(int argc, char** argv) {
     g_profiles = ShockProfiles::getProfiles();
 
     // Initialize plot data
+    g_time_data.resize(PLOT_POINTS);
+    g_position_data.resize(PLOT_POINTS);
+    g_force_data.resize(PLOT_POINTS);
     for (int i = 0; i < PLOT_POINTS; i++) {
-        g_time_data.push_back(i * 0.01f);
-        g_position_data.push_back(0);
-        g_force_data.push_back(0);
+        g_time_data[i] = i * 0.01f;
+        g_position_data[i] = 0;
+        g_force_data[i] = 0;
     }
 
     // Scan for COM ports on startup
@@ -540,17 +546,12 @@ void UpdatePlotData() {
     if (now - last_update < 10) return;
     last_update = now;
     
-    // Add new data point
+    // Circular buffer update
+    g_position_data[g_plot_index] = g_controller->getPosition();
+    g_force_data[g_plot_index] = g_controller->getForce();
+    
+    g_plot_index = (g_plot_index + 1) % PLOT_POINTS;
     g_plot_time += 0.01f;
-    
-    g_position_data.push_back(g_controller->getPosition());
-    g_force_data.push_back(g_controller->getForce());
-    
-    // Remove old data
-    if (g_position_data.size() > PLOT_POINTS) {
-        g_position_data.pop_front();
-        g_force_data.pop_front();
-    }
 }
 
 void HandleKeyboard() {
