@@ -3,10 +3,10 @@
  * @brief Main GUI application for shock tester using Dear ImGui
  */
 
-#include "imgui.h"
-#include "imgui_impl_glfw.h"
-#include "imgui_impl_opengl3.h"
-#include "implot.h"
+#include "imgui/imgui.h"
+#include "imgui/backends/imgui_impl_glfw.h"
+#include "imgui/backends/imgui_impl_opengl3.h"
+#include "imgui/implot.h"
 #include <GLFW/glfw3.h>
 
 #include "MotionController.h"
@@ -230,8 +230,8 @@ void ShowConnectionWindow() {
     for (size_t i = 0; i < g_available_ports.size(); i++) {
         char label[32];
         sprintf_s(label, "COM%d", g_available_ports[i]);
-        if (ImGui::Selectable(label, g_selected_port == i)) {
-            g_selected_port = i;
+        if (ImGui::Selectable(label, g_selected_port == (int)i)) {
+            g_selected_port = (int)i;
         }
     }
     ImGui::EndChild();
@@ -284,9 +284,9 @@ void ShowMainWindow() {
     ImGui::SetNextItemWidth(200);
     if (ImGui::BeginCombo("##Profile", g_profiles[g_selected_profile].name.c_str())) {
         for (size_t i = 0; i < g_profiles.size(); i++) {
-            bool is_selected = (g_selected_profile == i);
+            bool is_selected = (g_selected_profile == (int)i);
             if (ImGui::Selectable(g_profiles[i].name.c_str(), is_selected)) {
-                g_selected_profile = i;
+                g_selected_profile = (int)i;
             }
             if (is_selected) {
                 ImGui::SetItemDefaultFocus();
@@ -440,7 +440,7 @@ void ScanCOMPorts() {
             valueNameSize = sizeof(valueName);
             valueDataSize = sizeof(valueData);
             
-            if (RegEnumValueA(hKey, index++, valueName, &valueNameSize, NULL, &valueType, valueData, &valueDataSize) != ERROR_SUCCESS) {
+            if (RegEnumValueA(hKey, index++, valueName, (LPDWORD)&valueNameSize, NULL, &valueType, valueData, (LPDWORD)&valueDataSize) != ERROR_SUCCESS) {
                 break;
             }
             
