@@ -402,10 +402,9 @@ void MotionController::applyForce(float force_N) {
         motor.set_mode(Actuator::ForceMode);
         cout << "Called set_mode(ForceMode)" << endl;
         
-        // Wait and verify
-        Sleep(50);  // Give more time for mode switch
-        motor.run_in();
-        motor.run_out();
+        // Wait for mode switch
+        Sleep(50);  // Give time for mode switch
+        // Note: run_in/run_out should only be called from main loop
         
         Actuator::MotorMode new_mode = motor.get_mode();
         cout << "After switch - Mode: " << new_mode << " (should be " << Actuator::ForceMode << ")" << endl;

@@ -161,21 +161,7 @@ int main(int argc, char** argv) {
 
         // Update motor communication if connected
         if (g_connected && g_motor) {
-            // Process MODBUS communication
-            g_motor->run_in();
-            g_motor->run_out();
-            
-            // Debug output every second
-            static uint32_t last_debug = 0;
-            uint32_t now = GetTickCount();
-            if (now - last_debug > 1000) {
-                float pos = g_motor->get_position_um() / 1000.0f;
-                float force = g_motor->get_force_mN() / 1000.0f;
-                cout << "Debug - Pos: " << pos << " mm, Force: " << force << " N, Connected: " << g_motor->is_connected() << endl;
-                last_debug = now;
-            }
-            
-            // Update controller
+            // Update controller FIRST (this sets the force command)
             if (g_controller) {
                 g_controller->update();
                 UpdatePlotData();
@@ -187,6 +173,21 @@ int main(int argc, char** argv) {
                     ShowSuccess("Test completed!");
                 }
                 was_running = is_running;
+            }
+            
+            // THEN process MODBUS communication (send force command and receive response)
+            g_motor->run_out();  // Send the command (including force if in ForceMode)
+            g_motor->run_in();   // Receive the response
+            
+            // Debug output every second
+            static uint32_t last_debug = 0;
+            uint32_t now = GetTickCount();
+            if (now - last_debug > 1000) {
+                float pos = g_motor->get_position_um() / 1000.0f;
+                float force = g_motor->get_force_mN() / 1000.0f;
+                Actuator::MotorMode mode = g_motor->get_mode();
+                cout << "Debug - Pos: " << pos << " mm, Force: " << force << " N, Mode: " << mode << ", Connected: " << g_motor->is_connected() << endl;
+                last_debug = now;
             }
         }
 
@@ -514,9 +515,9 @@ bool ConnectToMotor(int port) {
                 
                 // Set to force mode
                 g_motor->set_mode(Actuator::ForceMode);
+                g_motor->run_out();  // Send mode change command
                 Sleep(100); // Wait for mode change
-                g_motor->run_in();
-                g_motor->run_out();
+                g_motor->run_in();   // Get response
                 
                 // Verify mode
                 Actuator::MotorMode mode = g_motor->get_mode();
@@ -529,9 +530,9 @@ bool ConnectToMotor(int port) {
                 // Test force command
                 cout << "Testing force command..." << endl;
                 g_motor->set_force_mN(10000); // 10N test
+                g_motor->run_out();  // Send force command
                 Sleep(100);
-                g_motor->run_in();
-                g_motor->run_out();
+                g_motor->run_in();   // Get response
                 float test_force = g_motor->get_force_mN() / 1000.0f;
                 cout << "Test force readback: " << test_force << " N (commanded 10N)" << endl;
                 g_motor->set_force_mN(0); // Clear test force
