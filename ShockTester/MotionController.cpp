@@ -81,7 +81,16 @@ void MotionController::updateVelocity(float dt) {
 void MotionController::startHoming() {
     cout << "Starting homing sequence..." << endl;
     
+    // Clear emergency stop if it was set
+    if (emergency_stop) {
+        cout << "Clearing emergency stop for homing..." << endl;
+        emergency_stop = false;
+    }
+    
     // Ensure motor is enabled and in force mode
+    if (motor.get_mode() == Actuator::SleepMode) {
+        cout << "Waking motor from sleep mode..." << endl;
+    }
     motor.enable();
     motor.set_mode(Actuator::ForceMode);
     cout << "Motor enabled in ForceMode for homing" << endl;
@@ -234,6 +243,19 @@ bool MotionController::isAtEndstop() {
 }
 
 void MotionController::startTest(const ShockProfile& profile, int repetitions) {
+    // Clear emergency stop flag if it was set
+    if (emergency_stop) {
+        cout << "Clearing emergency stop state..." << endl;
+        emergency_stop = false;
+        
+        // Wake motor from sleep if needed
+        if (motor.get_mode() == Actuator::SleepMode) {
+            cout << "Waking motor from sleep mode..." << endl;
+            motor.enable();
+            motor.set_mode(Actuator::ForceMode);
+        }
+    }
+    
     if (!is_homed) {
         cout << "ERROR: System must be homed before starting test!" << endl;
         return;
