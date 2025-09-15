@@ -257,7 +257,7 @@ void MotionController::stopTest() {
     test_running = false;
     motion_state = STATE_IDLE;
     applyForce(0);
-    motor.set_mode(Actuator::SleepMode);
+    // Don't put motor to sleep - keep it ready
     cout << "Test stopped." << endl;
 }
 
@@ -267,6 +267,7 @@ void MotionController::emergencyStop() {
     motion_state = STATE_IDLE;
     homing_state = HOMING_IDLE;
     applyForce(0);
+    // For emergency stop, do put motor to sleep for safety
     motor.set_mode(Actuator::SleepMode);
     cout << "EMERGENCY STOP ACTIVATED!" << endl;
 }
@@ -367,11 +368,17 @@ void MotionController::transitionToState(MotionState new_state) {
 void MotionController::applyForce(float force_N) {
     commanded_force_N = force_N;
     
-    // Ensure motor is in force mode and enabled
-    if (motor.get_mode() != Actuator::ForceMode) {
+    // Ensure motor is awake and in force mode
+    Actuator::Mode current_mode = motor.get_mode();
+    if (current_mode == Actuator::SleepMode || current_mode != Actuator::ForceMode) {
+        cout << "Current mode: " << current_mode << ", switching to ForceMode..." << endl;
+        motor.enable();  // Wake up the motor
         motor.set_mode(Actuator::ForceMode);
-        motor.enable();
-        cout << "Switching motor to ForceMode" << endl;
+        
+        // Verify mode switch
+        Sleep(10);  // Give time for mode switch
+        Actuator::Mode new_mode = motor.get_mode();
+        cout << "New mode: " << new_mode << " (ForceMode = " << Actuator::ForceMode << ")" << endl;
     }
     
     int force_mN = (int)(force_N * 1000.0f);
@@ -380,7 +387,8 @@ void MotionController::applyForce(float force_N) {
     // Debug output
     static int debug_counter = 0;
     if (++debug_counter % 10 == 0) {  // Every 10 calls
-        cout << "Commanding force: " << force_N << " N (" << force_mN << " mN)" << endl;
+        float actual_force = motor.get_force_mN() / 1000.0f;
+        cout << "Commanded: " << force_N << " N, Actual: " << actual_force << " N" << endl;
     }
 }
 
