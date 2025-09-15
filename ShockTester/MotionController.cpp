@@ -80,6 +80,12 @@ void MotionController::updateVelocity(float dt) {
 
 void MotionController::startHoming() {
     cout << "Starting homing sequence..." << endl;
+    
+    // Ensure motor is enabled and in force mode
+    motor.enable();
+    motor.set_mode(Actuator::ForceMode);
+    cout << "Motor enabled in ForceMode for homing" << endl;
+    
     homing_state = HOMING_START;
     is_homed = false;
     state_start_time = GetTickCount();
@@ -100,10 +106,13 @@ void MotionController::updateHoming() {
             // Apply negative force to move away from motor
             applyForce(-HOMING_FORCE_N);
             
-            if (isAtEndstop()) {
-                cout << "Found far endstop at position: " << current_position_mm << " mm" << endl;
-                homing_state = ZEROING;
-                state_start_time = now;
+            // Wait 1 second before checking for endstop to allow movement to start
+            if (now - state_start_time > 1000) {
+                if (isAtEndstop()) {
+                    cout << "Found far endstop at position: " << current_position_mm << " mm" << endl;
+                    homing_state = ZEROING;
+                    state_start_time = now;
+                }
             }
             
             // Timeout after 10 seconds
@@ -132,10 +141,13 @@ void MotionController::updateHoming() {
             // Apply positive force to move toward motor
             applyForce(HOMING_FORCE_N);
             
-            if (isAtEndstop()) {
-                cout << "Found near endstop at position: " << current_position_mm << " mm" << endl;
-                homing_state = MEASURING;
-                state_start_time = now;
+            // Wait 1 second before checking for endstop to allow movement to start
+            if (now - state_start_time > 1000) {
+                if (isAtEndstop()) {
+                    cout << "Found near endstop at position: " << current_position_mm << " mm" << endl;
+                    homing_state = MEASURING;
+                    state_start_time = now;
+                }
             }
             
             // Timeout after 10 seconds
@@ -194,13 +206,23 @@ bool MotionController::isAtEndstop() {
     bool is_stalled = (abs(current_velocity_mms) < STALL_VELOCITY_THRESHOLD_MMS) &&
                       (abs(commanded_force_N) > 20.0f);
     
+    // Debug output
+    static int debug_counter = 0;
+    if (++debug_counter % 50 == 0) {  // Every 50 calls (about 0.5 seconds)
+        cout << "Endstop check - Vel: " << current_velocity_mms 
+             << " mm/s, Cmd Force: " << commanded_force_N 
+             << " N, Stalled: " << is_stalled << endl;
+    }
+    
     if (is_stalled) {
         if (stall_start_time == 0) {
             stall_start_time = GetTickCount();
+            cout << "Stall detected, starting timer..." << endl;
         }
         
         // Check if stalled for long enough
         if (GetTickCount() - stall_start_time > STALL_TIME_MS) {
+            cout << "Endstop reached after " << STALL_TIME_MS << " ms stall" << endl;
             stall_start_time = 0; // Reset for next time
             return true;
         }
@@ -344,7 +366,22 @@ void MotionController::transitionToState(MotionState new_state) {
 
 void MotionController::applyForce(float force_N) {
     commanded_force_N = force_N;
-    motor.set_force_mN((int)(force_N * 1000.0f));
+    
+    // Ensure motor is in force mode and enabled
+    if (motor.get_mode() != Actuator::ForceMode) {
+        motor.set_mode(Actuator::ForceMode);
+        motor.enable();
+        cout << "Switching motor to ForceMode" << endl;
+    }
+    
+    int force_mN = (int)(force_N * 1000.0f);
+    motor.set_force_mN(force_mN);
+    
+    // Debug output
+    static int debug_counter = 0;
+    if (++debug_counter % 10 == 0) {  // Every 10 calls
+        cout << "Commanding force: " << force_N << " N (" << force_mN << " mN)" << endl;
+    }
 }
 
 string MotionController::getStateString() const {
