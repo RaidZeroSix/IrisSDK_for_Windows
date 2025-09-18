@@ -80,21 +80,22 @@ void MotionController::updateVelocity(float dt) {
 
 void MotionController::startHoming() {
     cout << "Starting homing sequence..." << endl;
-    
+
     // Clear emergency stop if it was set
     if (emergency_stop) {
         cout << "Clearing emergency stop for homing..." << endl;
         emergency_stop = false;
     }
-    
-    // Ensure motor is enabled and in force mode
-    if (motor.get_mode() == Actuator::SleepMode) {
-        cout << "Waking motor from sleep mode..." << endl;
-    }
+
+    // Ensure motor is enabled and in force mode - CRITICAL!
     motor.enable();
     motor.set_mode(Actuator::ForceMode);
-    cout << "Motor enabled in ForceMode for homing" << endl;
-    
+
+    // Force a zero command first to ensure motor is ready
+    motor.set_force_mN(0);
+
+    cout << "Motor set to ForceMode, ready for homing" << endl;
+
     homing_state = HOMING_START;
     is_homed = false;
     state_start_time = GetTickCount();
@@ -389,50 +390,20 @@ void MotionController::transitionToState(MotionState new_state) {
 
 void MotionController::applyForce(float force_N) {
     commanded_force_N = force_N;
-    
-    // Ensure motor is awake and in force mode
-    Actuator::MotorMode current_mode = motor.get_mode();
-    if (current_mode == Actuator::SleepMode || current_mode != Actuator::ForceMode) {
-        cout << "Mode change needed. Current mode: " << current_mode << endl;
-        
-        // Try to enable and set mode
-        motor.enable();
-        cout << "Called motor.enable()" << endl;
-        
-        motor.set_mode(Actuator::ForceMode);
-        cout << "Called set_mode(ForceMode)" << endl;
-        
-        // Wait for mode switch
-        Sleep(50);  // Give time for mode switch
-        // Note: run_in/run_out should only be called from main loop
-        
-        Actuator::MotorMode new_mode = motor.get_mode();
-        cout << "After switch - Mode: " << new_mode << " (should be " << Actuator::ForceMode << ")" << endl;
-        
-        if (new_mode != Actuator::ForceMode) {
-            cout << "ERROR: Failed to switch to ForceMode!" << endl;
-        }
-    }
-    
+
+    // Just send the force command - like Tutorial 7 does
+    // Don't check mode every iteration, that should be done once at startup
     int force_mN = (int)(force_N * 1000.0f);
     motor.set_force_mN(force_mN);
-    
-    // Comprehensive debug output
+
+    // Debug output less frequently
     static int debug_counter = 0;
-    if (++debug_counter % 10 == 0) {  // Every 10 calls
+    if (++debug_counter % 100 == 0) {  // Every 100 calls (about 1 second)
         float actual_force = motor.get_force_mN() / 1000.0f;
-        bool is_enabled = motor.is_enabled();
-        Actuator::MotorMode mode = motor.get_mode();
         float pos = motor.get_position_um() / 1000.0f;
-        
-        cout << "=== Motor Status ===" << endl;
-        cout << "  Commanded: " << force_N << " N (" << force_mN << " mN)" << endl;
-        cout << "  Actual: " << actual_force << " N" << endl;
-        cout << "  Position: " << pos << " mm" << endl;
-        cout << "  Mode: " << mode << endl;
-        cout << "  Enabled: " << is_enabled << endl;
-        cout << "  Connected: " << motor.is_connected() << endl;
-        cout << "===================" << endl;
+
+        cout << "Force - Cmd: " << force_N << "N, Actual: " << actual_force
+             << "N, Pos: " << pos << "mm" << endl;
     }
 }
 
