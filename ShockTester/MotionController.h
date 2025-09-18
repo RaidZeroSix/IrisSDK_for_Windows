@@ -121,7 +121,7 @@ private:
     
     // Homing parameters
     const float HOMING_VELOCITY_MMS = 30.0f;
-    const float HOMING_FORCE_N = 50.0f;
+    const float HOMING_FORCE_N = 100.0f;  // Increased from 50N to 100N
     const float STALL_VELOCITY_THRESHOLD_MMS = 5.0f;
     const uint32_t STALL_TIME_MS = 750;
     
